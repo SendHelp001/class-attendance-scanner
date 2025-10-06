@@ -1,0 +1,7 @@
+{
+  "name": "devcon-scanner",
+  "integrations": {
+    "capacitor": {}
+  },
+  "type": "react-vite"
+}
