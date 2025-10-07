@@ -1,5 +1,23 @@
 import { useEffect, useState } from "react";
-import { IonButton, IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonContent, IonHeader, IonInput, IonItem, IonLabel, IonList, IonPage, IonTitle, IonToolbar, useIonToast } from "@ionic/react";
+import {
+  IonButton,
+  IonCard,
+  IonCardContent,
+  IonCardHeader,
+  IonCardTitle,
+  IonContent,
+  IonHeader,
+  IonInput,
+  IonItem,
+  IonLabel,
+  IonList,
+  IonPage,
+  IonTitle,
+  IonToolbar,
+  useIonToast,
+  IonRefresher, // <-- NEW IMPORT
+  IonRefresherContent, // <-- NEW IMPORT
+} from "@ionic/react";
 import "./Tab1.css";
 import { ClassRoom, Student, addStudent, listMyClasses, listStudents, createClass, joinClassByCode } from "../utils/api";
 import { supabase } from "../utils/SupabaseClient";
@@ -23,6 +41,11 @@ const Tab1: React.FC = () => {
     } catch (e: any) {
       present({ message: e.message ?? "Failed to load classes", duration: 2000, color: "danger" });
     }
+  };
+
+  const handleRefresh = async (event: CustomEvent) => {
+    await load();
+    event.detail.complete();
   };
 
   useEffect(() => {
@@ -70,6 +93,10 @@ const Tab1: React.FC = () => {
         </IonToolbar>
       </IonHeader>
       <IonContent fullscreen>
+        <IonRefresher slot="fixed" onIonRefresh={handleRefresh}>
+          <IonRefresherContent></IonRefresherContent>
+        </IonRefresher>
+
         <IonCard>
           <IonCardHeader>
             <IonCardTitle>Create a new class</IonCardTitle>
@@ -100,7 +127,7 @@ const Tab1: React.FC = () => {
                   const cls = await joinClassByCode(joinCode.trim());
                   present({ message: `Joined ${cls.name}`, duration: 1400, color: "success" });
                   setJoinCode("");
-                  load();
+                  load(); // Reload classes list after joining
                 } catch (e: any) {
                   present({
                     message: e.message ?? "Failed to join",

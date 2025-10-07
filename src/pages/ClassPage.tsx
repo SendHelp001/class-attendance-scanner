@@ -18,6 +18,10 @@ import {
   IonToolbar,
   useIonToast,
   IonAlert,
+  IonRefresher,
+  IonRefresherContent,
+  IonSelect,
+  IonSelectOption,
 } from "@ionic/react";
 import { downloadOutline, personRemoveOutline, lockClosedOutline } from "ionicons/icons";
 import { useHistory, useLocation } from "react-router-dom";
@@ -87,7 +91,7 @@ const ClassPage: React.FC = () => {
 
   const [showRemoveModeratorAlert, setShowRemoveModeratorAlert] = useState<boolean>(false);
   const [moderatorToRemove, setModeratorToRemove] = useState<ClassModerator | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null); // Current user's ID
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const [tab, setTab] = useState<string>("attendance");
   const [attendance, setAttendance] = useState<any[]>([]);
@@ -95,6 +99,11 @@ const ClassPage: React.FC = () => {
   const [moderators, setModerators] = useState<ClassModerator[]>([]);
   const [scanTypes, setScanTypes] = useState<ScanType[]>([]);
   const [newScanTypeName, setNewScanTypeName] = useState<string>("");
+
+  // --- NEW STATE FOR FILTERING ---
+  const [filterText, setFilterText] = useState<string>("");
+  const [filterScanTypeId, setFilterScanTypeId] = useState<string>("all"); // 'all' is the default value
+  // -------------------------------
 
   // Fetch the current user's ID on load to check for self-removal
   useEffect(() => {
@@ -107,6 +116,7 @@ const ClassPage: React.FC = () => {
     fetchUser();
   }, []);
 
+  // Main data fetching function
   const fetchClassData = async (id: string) => {
     if (!id) return;
     try {
@@ -123,11 +133,44 @@ const ClassPage: React.FC = () => {
     }
   };
 
+  // Refresher handler calls the main fetch function
+  const handleRefresh = async (event: CustomEvent) => {
+    await fetchClassData(classId);
+    event.detail.complete(); // Signal the refresher that loading is done
+    present({ message: "Class data refreshed! 🔄", duration: 1500, color: "secondary" });
+  };
+
   useEffect(() => {
     if (classId) {
       fetchClassData(classId);
     }
   }, [classId]);
+
+  // --- DYNAMIC FILTERING LOGIC ---
+  const filteredAttendance = useMemo(() => {
+    let list = attendance;
+    const lowerFilterText = filterText.toLowerCase().trim();
+
+    // 1. Filter by Scan Type ID
+    if (filterScanTypeId !== "all") {
+      list = list.filter((a) => a.scan_type_id === filterScanTypeId);
+    }
+
+    // 2. Filter by Dynamic Text Search (Name, Student ID, Scanned Value, or Note)
+    if (lowerFilterText.length > 0) {
+      list = list.filter((a) => {
+        const studentName = a.students?.name?.toLowerCase() || "";
+        const studentId = a.students?.student_id?.toLowerCase() || "";
+        const scannedValue = a.scanned_value?.toLowerCase() || "";
+        const note = a.note?.toLowerCase() || "";
+
+        return studentName.includes(lowerFilterText) || studentId.includes(lowerFilterText) || scannedValue.includes(lowerFilterText) || note.includes(lowerFilterText);
+      });
+    }
+
+    return list;
+  }, [attendance, filterScanTypeId, filterText]);
+  // ---------------------------------
 
   const handleRenameClass = async () => {
     if (!classDetails || !editClassName.trim() || editClassName.trim() === classDetails.name) return;
@@ -170,7 +213,8 @@ const ClassPage: React.FC = () => {
   };
 
   const exportAttendanceCsv = () => {
-    const rows = attendance.map((a) => ({
+    // Export only the currently filtered data
+    const rows = filteredAttendance.map((a) => ({
       Timestamp: new Date(a.created_at).toLocaleString(),
       ClassID: a.class_id,
       Type: a.scan_types?.name || (a.type as AttendanceScanType) || "",
@@ -180,11 +224,11 @@ const ClassPage: React.FC = () => {
       RecordID: a.id,
     }));
     const csv = Papa.unparse(rows, { quotes: true });
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-is-8;" });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `attendance_${classId}.csv`;
+    a.download = `attendance_${classId}_filtered.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -248,7 +292,7 @@ const ClassPage: React.FC = () => {
         <IonToolbar>
           <IonSegment scrollable value={tab} onIonChange={(e) => setTab((e.detail.value as string) || "attendance")} style={tabSegmentStyle}>
             <IonSegmentButton value="attendance" style={{ minWidth: "auto", padding: "0 12px" }}>
-              Attendance
+              Attendance ({filteredAttendance.length})
             </IonSegmentButton>
             <IonSegmentButton value="students" style={{ minWidth: "auto", padding: "0 12px" }}>
               Students
@@ -266,22 +310,61 @@ const ClassPage: React.FC = () => {
         </IonToolbar>
       </IonHeader>
       <IonContent>
+        <IonRefresher slot="fixed" onIonRefresh={handleRefresh}>
+          <IonRefresherContent></IonRefresherContent>
+        </IonRefresher>
+
         {tab === "attendance" && (
-          <IonList>
-            {attendance.map((a) => (
-              <IonItem key={a.id} lines="full">
-                <IonLabel>
-                  <h3>
-                    {a.scan_types?.name || (a.type as AttendanceScanType) || ""}
-                    {a.note ? ` - ${a.note}` : ""}
-                  </h3>
-                  <p>
-                    {new Date(a.created_at).toLocaleString()} • {a.students?.name ?? ""} ({a.students?.student_id ?? a.scanned_value})
-                  </p>
-                </IonLabel>
+          <IonCard>
+            <IonCardContent>
+              {/* --- FILTER UI --- */}
+              <IonItem lines="full">
+                <IonLabel position="stacked">Filter by Scan Type</IonLabel>
+                <IonSelect value={filterScanTypeId} placeholder="All Types" onIonChange={(e) => setFilterScanTypeId(e.detail.value)}>
+                  <IonSelectOption value="all">All Types</IonSelectOption>
+                  {scanTypes.map((t) => (
+                    <IonSelectOption key={t.id} value={t.id}>
+                      {t.name}
+                    </IonSelectOption>
+                  ))}
+                </IonSelect>
               </IonItem>
-            ))}
-          </IonList>
+              <IonItem lines="full">
+                <IonInput placeholder="Search by Name, ID, or Note" value={filterText} onIonInput={(e) => setFilterText(e.detail.value ?? "")} />
+              </IonItem>
+
+              <p className="ion-padding-top">
+                Displaying <span>{filteredAttendance.length}</span> of <span>{attendance.length}</span> total records.
+              </p>
+              {/* ------------------- */}
+
+              <IonList>
+                {filteredAttendance.map((a) => (
+                  <IonItem key={a.id} lines="full">
+                    <IonLabel>
+                      <h3>
+                        {a.scan_types?.name || (a.type as AttendanceScanType) || "N/A"}
+                        {a.note ? ` - ${a.note}` : ""}
+                      </h3>
+                      <p>
+                        {new Date(a.created_at).toLocaleString()} • {a.students?.name ?? "Unknown Student"} ({a.students?.student_id ?? a.scanned_value})
+                      </p>
+                    </IonLabel>
+                  </IonItem>
+                ))}
+                {filteredAttendance.length === 0 && attendance.length > 0 && (
+                  <IonItem lines="none">
+                    <IonLabel color="medium">No records match your current filters.</IonLabel>
+                  </IonItem>
+                )}
+                {attendance.length === 0 && (
+                  <IonItem lines="none">
+                    <IonLabel color="medium">No attendance records yet.</IonLabel>
+                  </IonItem>
+                )}
+              </IonList>
+            </IonCardContent>
+          </IonCard>
         )}
 
         {tab === "students" && (
@@ -319,12 +402,11 @@ const ClassPage: React.FC = () => {
                     const displayName = m.profiles?.display_name || m.profiles?.email || m.user_id;
 
                     const isModeratorOwner = m.user_id === classDetails.owner_id;
-                    const isSelf = m.user_id === currentUserId; // Disable removing self
+                    const isSelf = m.user_id === currentUserId;
 
                     return (
                       <IonItem key={m.id} lines="full">
                         <IonLabel>
-                          {/* Correctly rendering moderator name and owner tag */}
                           <p>
                             {displayName} {isModeratorOwner && <strong>(Owner)</strong>}
                           </p>
