@@ -101,7 +101,6 @@ export async function removeModerator(classId: UUID, userId: UUID): Promise<void
 }
 
 export async function listModerators(classId: UUID): Promise<ClassModerator[]> {
-	 // Prefer nested profile if the FK is defined; otherwise fall back to plain select
 	 const nested = await supabase
 		 .from("class_moderators")
 		 .select("id, class_id, user_id, created_at, profiles:profiles(display_name, email)")

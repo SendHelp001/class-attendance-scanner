@@ -17,9 +17,9 @@ import {
   IonTitle,
   IonToolbar,
   useIonToast,
-  IonAlert, // Import IonAlert for confirmation dialog
+  IonAlert,
 } from "@ionic/react";
-import { downloadOutline, personRemoveOutline } from "ionicons/icons";
+import { downloadOutline, personRemoveOutline, lockClosedOutline } from "ionicons/icons";
 import { useHistory, useLocation } from "react-router-dom";
 import {
   bulkAddStudents,
@@ -30,17 +30,26 @@ import {
   listScanTypes,
   addScanType,
   deleteScanType,
-  getClassDetails, // << ADDED
-  updateClass, // << ADDED
-  deleteClass, // << ADDED
+  getClassDetails,
+  updateClass,
+  deleteClass,
   type AttendanceScanType,
   type ClassModerator,
   type Student,
   type ScanType,
-  type Class, // << ADDED
+  type Class,
 } from "../utils/api";
+import { supabase } from "../utils/SupabaseClient";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
+
+// CSS for scrollable segment and spacing
+const tabSegmentStyle = {
+  "--padding-start": "16px",
+  "--padding-end": "16px",
+  overflowX: "scroll",
+  flexWrap: "nowrap",
+};
 
 function useQuery() {
   const { search } = useLocation();
@@ -56,9 +65,9 @@ function extractStudentRow(raw: Record<string, any>): { student_id: string; name
     }
     return "";
   };
-  // ID detection: "student id", "id", "code"
+
   const studentId = findVal(/^(student\s*id)$/i) || findVal(/\bstudent\s*id\b/i) || findVal(/^id$/i) || findVal(/^code$/i);
-  // Name detection: "name", "student name", Google Forms header variant with parentheses
+
   const name = findVal(/^name$/i) || findVal(/^student\s*name$/i) || findVal(/student\s*name.*lastname.*firstname/i) || findVal(/\(lastname,\s*firstname/i);
   const sid = String(studentId || "").trim();
   const nm = String(name || "").trim();
@@ -76,6 +85,10 @@ const ClassPage: React.FC = () => {
   const [editClassName, setEditClassName] = useState<string>("");
   const [showDeleteAlert, setShowDeleteAlert] = useState<boolean>(false);
 
+  const [showRemoveModeratorAlert, setShowRemoveModeratorAlert] = useState<boolean>(false);
+  const [moderatorToRemove, setModeratorToRemove] = useState<ClassModerator | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null); // Current user's ID
+
   const [tab, setTab] = useState<string>("attendance");
   const [attendance, setAttendance] = useState<any[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -83,16 +96,24 @@ const ClassPage: React.FC = () => {
   const [scanTypes, setScanTypes] = useState<ScanType[]>([]);
   const [newScanTypeName, setNewScanTypeName] = useState<string>("");
 
-  // Function to fetch all class-related data
+  // Fetch the current user's ID on load to check for self-removal
+  useEffect(() => {
+    const fetchUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setCurrentUserId(user?.id ?? null);
+    };
+    fetchUser();
+  }, []);
+
   const fetchClassData = async (id: string) => {
     if (!id) return;
     try {
-      // Fetch Class Details
       const details = await getClassDetails(id);
       setClassDetails(details);
-      setEditClassName(details.name); // Initialize rename field
+      setEditClassName(details.name);
 
-      // Fetch other data
       listAttendance(id, 500).then(setAttendance);
       listStudents(id).then(setStudents);
       listModerators(id).then(setModerators);
@@ -126,6 +147,25 @@ const ClassPage: React.FC = () => {
       history.push("/classes");
     } catch (e: any) {
       present({ message: e.message ?? "Failed to delete class", duration: 2000, color: "danger" });
+    }
+  };
+
+  const confirmRemoveModerator = (moderator: ClassModerator) => {
+    setModeratorToRemove(moderator);
+    setShowRemoveModeratorAlert(true);
+  };
+
+  const handleRemoveModerator = async () => {
+    if (!moderatorToRemove) return;
+    try {
+      await removeModerator(classId, moderatorToRemove.user_id);
+      setModerators(await listModerators(classId));
+      present({ message: `${moderatorToRemove.profiles?.display_name || "Moderator"} removed`, duration: 1500, color: "success" });
+    } catch (e: any) {
+      present({ message: e.message, duration: 2000, color: "danger" });
+    } finally {
+      setModeratorToRemove(null);
+      setShowRemoveModeratorAlert(false);
     }
   };
 
@@ -195,8 +235,7 @@ const ClassPage: React.FC = () => {
           </IonButtons>
           <IonTitle>
             {classDetails.name} ({classDetails.code})
-          </IonTitle>{" "}
-          {/* Display class name/code */}
+          </IonTitle>
           <IonButtons slot="end">
             {tab === "attendance" && (
               <IonButton onClick={exportAttendanceCsv}>
@@ -207,12 +246,22 @@ const ClassPage: React.FC = () => {
           </IonButtons>
         </IonToolbar>
         <IonToolbar>
-          <IonSegment value={tab} onIonChange={(e) => setTab((e.detail.value as string) || "attendance")}>
-            <IonSegmentButton value="attendance">Attendance</IonSegmentButton>
-            <IonSegmentButton value="students">Students</IonSegmentButton>
-            <IonSegmentButton value="moderators">Moderators</IonSegmentButton>
-            <IonSegmentButton value="scanTypes">Scan Types</IonSegmentButton>
-            <IonSegmentButton value="settings">Settings</IonSegmentButton>
+          <IonSegment scrollable value={tab} onIonChange={(e) => setTab((e.detail.value as string) || "attendance")} style={tabSegmentStyle}>
+            <IonSegmentButton value="attendance" style={{ minWidth: "auto", padding: "0 12px" }}>
+              Attendance
+            </IonSegmentButton>
+            <IonSegmentButton value="students" style={{ minWidth: "auto", padding: "0 12px" }}>
+              Students
+            </IonSegmentButton>
+            <IonSegmentButton value="moderators" style={{ minWidth: "auto", padding: "0 12px" }}>
+              Moderators
+            </IonSegmentButton>
+            <IonSegmentButton value="scanTypes" style={{ minWidth: "auto", padding: "0 12px" }}>
+              Scan Types
+            </IonSegmentButton>
+            <IonSegmentButton value="settings" style={{ minWidth: "auto", padding: "0 12px" }}>
+              Settings
+            </IonSegmentButton>
           </IonSegment>
         </IonToolbar>
       </IonHeader>
@@ -266,32 +315,55 @@ const ClassPage: React.FC = () => {
               <IonCardContent>
                 <h3>Moderators</h3>
                 <IonList>
-                  {moderators.map((m) => (
-                    <IonItem key={m.id} lines="full">
-                      <IonLabel>
-                        <p>{m.profiles?.display_name || m.profiles?.email || m.user_id}</p>
-                      </IonLabel>
-                      <IonButton
-                        slot="end"
-                        color="danger"
-                        fill="clear"
-                        onClick={async () => {
-                          try {
-                            await removeModerator(classId, m.user_id);
-                            setModerators(await listModerators(classId));
-                            present({ message: "Removed", duration: 1000 });
-                          } catch (e: any) {
-                            present({ message: e.message, duration: 2000, color: "danger" });
-                          }
-                        }}
-                      >
-                        <IonIcon slot="icon-only" icon={personRemoveOutline} />
-                      </IonButton>
-                    </IonItem>
-                  ))}
+                  {moderators.map((m) => {
+                    const displayName = m.profiles?.display_name || m.profiles?.email || m.user_id;
+
+                    const isModeratorOwner = m.user_id === classDetails.owner_id;
+                    const isSelf = m.user_id === currentUserId; // Disable removing self
+
+                    return (
+                      <IonItem key={m.id} lines="full">
+                        <IonLabel>
+                          {/* Correctly rendering moderator name and owner tag */}
+                          <p>
+                            {displayName} {isModeratorOwner && <strong>(Owner)</strong>}
+                          </p>
+                        </IonLabel>
+
+                        {isModeratorOwner || isSelf ? (
+                          <IonIcon slot="end" icon={lockClosedOutline} color="medium" style={{ opacity: 0.7 }} title="Cannot remove self or owner" />
+                        ) : (
+                          <IonButton slot="end" color="danger" fill="clear" onClick={() => confirmRemoveModerator(m)}>
+                            <IonIcon slot="icon-only" icon={personRemoveOutline} />
+                          </IonButton>
+                        )}
+                      </IonItem>
+                    );
+                  })}
                 </IonList>
               </IonCardContent>
             </IonCard>
+
+            {/* Moderator Removal Confirmation Alert */}
+            <IonAlert
+              isOpen={showRemoveModeratorAlert}
+              onDidDismiss={() => setShowRemoveModeratorAlert(false)}
+              header={"Confirm Removal"}
+              message={`Are you sure you want to remove **${
+                moderatorToRemove?.profiles?.display_name || moderatorToRemove?.profiles?.email || moderatorToRemove?.user_id || "this moderator"
+              }** from the class? They will lose access.`}
+              buttons={[
+                {
+                  text: "Cancel",
+                  role: "cancel",
+                },
+                {
+                  text: "Remove",
+                  cssClass: "alert-button-danger",
+                  handler: handleRemoveModerator,
+                },
+              ]}
+            />
           </>
         )}
 
@@ -346,7 +418,6 @@ const ClassPage: React.FC = () => {
           <IonCard>
             <IonCardContent>
               <IonList>
-                {/* Rename Class */}
                 <IonItem lines="full">
                   <IonLabel position="stacked">Rename Class</IonLabel>
                   <IonInput value={editClassName} placeholder="New Class Name" onIonChange={(e) => setEditClassName(e.detail.value ?? "")} />
@@ -355,13 +426,11 @@ const ClassPage: React.FC = () => {
                   </IonButton>
                 </IonItem>
 
-                {/* Class Code (Read-only for simplicity, can be made editable) */}
                 <IonItem lines="full">
                   <IonLabel>Class Code</IonLabel>
                   <IonInput value={classDetails.code} readonly />
                 </IonItem>
 
-                {/* Delete Class */}
                 <IonItem lines="full">
                   <IonLabel color="danger">Delete Class</IonLabel>
                   <IonButton slot="end" color="danger" onClick={() => setShowDeleteAlert(true)}>
@@ -370,7 +439,6 @@ const ClassPage: React.FC = () => {
                 </IonItem>
               </IonList>
             </IonCardContent>
-            {/* Delete Confirmation Alert */}
             <IonAlert
               isOpen={showDeleteAlert}
               onDidDismiss={() => setShowDeleteAlert(false)}
