@@ -13,9 +13,10 @@ import { IonReactRouter } from "@ionic/react-router";
 import { barcodeOutline, bookOutline, listOutline } from "ionicons/icons";
 import Tab1 from "./pages/Tab1";
 import Tab2 from "./pages/Tab2";
-import Tab3 from "./pages/Tab3";
+import ProfilePage from "./pages/Profile";
 import Auth from "./pages/Auth";
 import { useAuth } from "./utils/AuthProvider";
+import ClassPage from "./pages/ClassPage";
 
 /* Core CSS required for Ionic components to work properly */
 import "@ionic/react/css/core.css";
@@ -65,8 +66,11 @@ const App: React.FC = () => {
               <Route exact path="/tab2">
                 <Tab2 />
               </Route>
-              <Route path="/tab3">
-                <Tab3 />
+              <Route path="/profile">
+                <ProfilePage />
+              </Route>
+              <Route path="/class">
+                <ClassPage />
               </Route>
               <Route exact path="/">
                 <Redirect to="/tab1" />
@@ -81,9 +85,9 @@ const App: React.FC = () => {
                 <IonIcon aria-hidden="true" icon={barcodeOutline} />
                 <IonLabel>Scan</IonLabel>
               </IonTabButton>
-              <IonTabButton tab="tab3" href="/tab3">
+              <IonTabButton tab="profile" href="/profile">
                 <IonIcon aria-hidden="true" icon={listOutline} />
-                <IonLabel>Logs</IonLabel>
+                <IonLabel>Profile</IonLabel>
               </IonTabButton>
             </IonTabBar>
           </IonTabs>

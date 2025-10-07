@@ -20,6 +20,7 @@ import {
 import "./Tab2.css";
 import { AttendanceScanType, ClassRoom, listMyClasses, scanAttendance } from "../utils/api";
 import { BarcodeScanner } from "@capacitor-mlkit/barcode-scanning";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 
 const Tab2: React.FC = () => {
   const [classes, setClasses] = useState<ClassRoom[]>([]);
@@ -27,6 +28,7 @@ const Tab2: React.FC = () => {
   const [type, setType] = useState<AttendanceScanType>("IN");
   const [present] = useIonToast();
   const [customNote, setCustomNote] = useState<string>("");
+  const [scannerMode, setScannerMode] = useState<"native" | "web">("native");
 
   useEffect(() => {
     listMyClasses()
@@ -46,15 +48,38 @@ const Tab2: React.FC = () => {
       present({ message: "Select a class", duration: 1500 });
       return;
     }
-    const ok = await ensurePermission();
-    if (!ok) {
-      present({ message: "Camera permission denied", duration: 2000, color: "danger" });
-      return;
-    }
     try {
-      const { barcodes } = await BarcodeScanner.scan();
-      if (!barcodes?.length) return;
-      const value = barcodes[0].rawValue ?? "";
+      let value = "";
+      if (scannerMode === "native") {
+        const ok = await ensurePermission();
+        if (!ok) {
+          present({ message: "Camera permission denied", duration: 2000, color: "danger" });
+          return;
+        }
+        const { barcodes } = await BarcodeScanner.scan();
+        if (!barcodes?.length) return;
+        value = barcodes[0].rawValue ?? "";
+      } else {
+        // Web fallback using ZXing
+        const codeReader = new BrowserMultiFormatReader();
+        const video = document.createElement("video");
+        video.style.position = "fixed";
+        video.style.inset = "0";
+        video.style.width = "100%";
+        video.style.height = "100%";
+        video.style.objectFit = "cover";
+        video.style.zIndex = "9999";
+        document.body.appendChild(video);
+        try {
+          const result = await codeReader.decodeOnceFromVideoDevice(undefined, video);
+          value = result?.getText() ?? "";
+        } finally {
+          try {
+            (codeReader as any)?.reset?.();
+          } catch {}
+          video.remove();
+        }
+      }
       if (!value) return;
       const noteToSend = type === "CUSTOM" ? customNote?.trim() || "CUSTOM" : undefined;
       const { student } = await scanAttendance(selectedClassId, value, type, noteToSend);
@@ -74,6 +99,14 @@ const Tab2: React.FC = () => {
         <IonToolbar>
           <IonTitle>Scan</IonTitle>
           <IonButtons slot="end">
+            <IonSelect
+              value={scannerMode}
+              interface="popover"
+              onIonChange={(e) => setScannerMode(e.detail.value)}
+            >
+              <IonSelectOption value="native">Native</IonSelectOption>
+              <IonSelectOption value="web">Web</IonSelectOption>
+            </IonSelect>
             <IonButton onClick={onScan}>Scan</IonButton>
           </IonButtons>
         </IonToolbar>

@@ -24,10 +24,13 @@ import {
   listMyClasses,
   listStudents,
   createClass,
+  joinClassByCode,
 } from "../utils/api";
 import { supabase } from "../utils/SupabaseClient";
+import { useHistory } from "react-router-dom";
 
 const Tab1: React.FC = () => {
+  const history = useHistory();
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [newClassName, setNewClassName] = useState<string>("");
   const [present] = useIonToast();
@@ -35,6 +38,7 @@ const Tab1: React.FC = () => {
   const [students, setStudents] = useState<Student[]>([]);
   const [studentId, setStudentId] = useState<string>("");
   const [studentName, setStudentName] = useState<string>("");
+  const [joinCode, setJoinCode] = useState<string>("");
 
   const load = async () => {
     try {
@@ -108,6 +112,41 @@ const Tab1: React.FC = () => {
           </IonCardContent>
         </IonCard>
 
+        <IonCard>
+          <IonCardHeader>
+            <IonCardTitle>Join a class by code</IonCardTitle>
+          </IonCardHeader>
+          <IonCardContent>
+            <IonItem>
+              <IonInput
+                placeholder="Enter code"
+                value={joinCode}
+                onIonInput={(e) => setJoinCode(e.detail.value ?? "")}
+              />
+            </IonItem>
+            <IonButton
+              expand="block"
+              onClick={async () => {
+                if (!joinCode.trim()) return;
+                try {
+                  const cls = await joinClassByCode(joinCode.trim());
+                  present({ message: `Joined ${cls.name}`, duration: 1400, color: "success" });
+                  setJoinCode("");
+                  load();
+                } catch (e: any) {
+                  present({
+                    message: e.message ?? "Failed to join",
+                    duration: 2000,
+                    color: "danger",
+                  });
+                }
+              }}
+            >
+              Join
+            </IonButton>
+          </IonCardContent>
+        </IonCard>
+
         <IonList>
           {classes.map((c) => (
             <div key={c.id}>
@@ -121,6 +160,11 @@ const Tab1: React.FC = () => {
                   <p>Share code: {c.code}</p>
                 </IonLabel>
               </IonItem>
+              {activeClassId === c.id && (
+                <IonButton className="ion-margin" onClick={() => history.push(`/class?id=${c.id}`)}>
+                  Open Class
+                </IonButton>
+              )}
               {activeClassId === c.id && (
                 <IonCard>
                   <IonCardHeader>
