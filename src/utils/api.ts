@@ -77,7 +77,7 @@ export async function createClass(name: string): Promise<ClassRoom> {
         .from("classes")
         .insert({ name, owner_id: ownerId, code })
         .select()
-        .single();
+        .maybeSingle();
     if (error) throw error;
     return data as ClassRoom;
 }
@@ -121,8 +121,9 @@ export async function listModerators(classId: UUID): Promise<ClassModerator[]> {
 export async function joinClassByCode(code: string): Promise<ClassRoom> {
 	 const userId = await getCurrentUserId();
 	 if (!userId) throw new Error("Not authenticated");
-	 const { data: cls, error: cErr } = await supabase.from("classes").select("*").eq("code", code).single();
+	 const { data: cls, error: cErr } = await supabase.from("classes").select("*").eq("code", code).maybeSingle();
 	 if (cErr) throw cErr;
+	 if (!cls) throw new Error("Class not found");
 	 // Insert moderator if not exists
 	 const { error: mErr } = await supabase.from("class_moderators").insert({ class_id: cls.id, user_id: userId }).select().single();
 	 // If conflict due to unique, ignore
@@ -235,6 +236,50 @@ export async function listLogs(classId: UUID, limit: number = 200): Promise<Clas
         .limit(limit);
     if (error) throw error;
     return data as ClassLog[];
+}
+
+
+export interface Class {
+  id: string;
+  owner_id: string;
+  name: string;
+  code: string;
+  created_at: string;
+}
+
+
+export async function getClassDetails(classId: string): Promise<Class> {
+  const { data, error } = await supabase
+    .from('classes')
+    .select('id, name, code, owner_id, created_at')
+    .eq('id', classId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as Class;
+}
+
+
+export async function updateClass(classId: string, updates: Partial<{ name: string; code: string }>): Promise<Class> {
+  const { data, error } = await supabase
+    .from('classes')
+    .update(updates)
+    .eq('id', classId)
+    .select()
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as Class;
+}
+
+
+export async function deleteClass(classId: string): Promise<void> {
+  const { error } = await supabase
+    .from('classes')
+    .delete()
+    .eq('id', classId);
+
+  if (error) throw error;
 }
 
 export async function getMyProfile(): Promise<Profile | null> {

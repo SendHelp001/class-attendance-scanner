@@ -1,14 +1,5 @@
 import { Redirect, Route } from "react-router-dom";
-import {
-  IonApp,
-  IonIcon,
-  IonLabel,
-  IonRouterOutlet,
-  IonTabBar,
-  IonTabButton,
-  IonTabs,
-  setupIonicReact,
-} from "@ionic/react";
+import { IonApp, IonIcon, IonLabel, IonRouterOutlet, IonTabBar, IonTabButton, IonTabs, setupIonicReact } from "@ionic/react";
 import { IonReactRouter } from "@ionic/react-router";
 import { barcodeOutline, bookOutline, listOutline } from "ionicons/icons";
 import Tab1 from "./pages/Tab1";
@@ -60,32 +51,32 @@ const App: React.FC = () => {
         {isAuthed ? (
           <IonTabs>
             <IonRouterOutlet>
-              <Route exact path="/tab1">
+              <Route exact path="/devcon-scanner/tab1">
                 <Tab1 />
               </Route>
-              <Route exact path="/tab2">
+              <Route exact path="/devcon-scanner/tab2">
                 <Tab2 />
               </Route>
-              <Route path="/profile">
+              <Route path="/devcon-scanner/profile">
                 <ProfilePage />
               </Route>
-              <Route path="/class">
+              <Route path="/devcon-scanner/class">
                 <ClassPage />
               </Route>
               <Route exact path="/">
-                <Redirect to="/tab1" />
+                <Redirect to="/devcon-scanner/tab1" />
               </Route>
             </IonRouterOutlet>
             <IonTabBar slot="bottom">
-              <IonTabButton tab="tab1" href="/tab1">
+              <IonTabButton tab="tab1" href="/devcon-scanner/tab1">
                 <IonIcon aria-hidden="true" icon={bookOutline} />
                 <IonLabel>Classes</IonLabel>
               </IonTabButton>
-              <IonTabButton tab="tab2" href="/tab2">
+              <IonTabButton tab="tab2" href="/devcon-scanner/tab2">
                 <IonIcon aria-hidden="true" icon={barcodeOutline} />
                 <IonLabel>Scan</IonLabel>
               </IonTabButton>
-              <IonTabButton tab="profile" href="/profile">
+              <IonTabButton tab="profile" href="/devcon-scanner/profile">
                 <IonIcon aria-hidden="true" icon={listOutline} />
                 <IonLabel>Profile</IonLabel>
               </IonTabButton>
@@ -93,11 +84,11 @@ const App: React.FC = () => {
           </IonTabs>
         ) : (
           <IonRouterOutlet>
-            <Route exact path="/auth">
+            <Route exact path="/devcon-scanner/auth">
               <Auth />
             </Route>
             <Route>
-              <Redirect to="/auth" />
+              <Redirect to="/devcon-scanner/auth" />
             </Route>
           </IonRouterOutlet>
         )}

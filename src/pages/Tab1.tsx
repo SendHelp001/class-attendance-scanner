@@ -1,31 +1,7 @@
 import { useEffect, useState } from "react";
-import {
-  IonButton,
-  IonCard,
-  IonCardContent,
-  IonCardHeader,
-  IonCardTitle,
-  IonContent,
-  IonHeader,
-  IonInput,
-  IonItem,
-  IonLabel,
-  IonList,
-  IonPage,
-  IonTitle,
-  IonToolbar,
-  useIonToast,
-} from "@ionic/react";
+import { IonButton, IonCard, IonCardContent, IonCardHeader, IonCardTitle, IonContent, IonHeader, IonInput, IonItem, IonLabel, IonList, IonPage, IonTitle, IonToolbar, useIonToast } from "@ionic/react";
 import "./Tab1.css";
-import {
-  ClassRoom,
-  Student,
-  addStudent,
-  listMyClasses,
-  listStudents,
-  createClass,
-  joinClassByCode,
-} from "../utils/api";
+import { ClassRoom, Student, addStudent, listMyClasses, listStudents, createClass, joinClassByCode } from "../utils/api";
 import { supabase } from "../utils/SupabaseClient";
 import { useHistory } from "react-router-dom";
 
@@ -100,11 +76,7 @@ const Tab1: React.FC = () => {
           </IonCardHeader>
           <IonCardContent>
             <IonItem>
-              <IonInput
-                placeholder="Class name"
-                value={newClassName}
-                onIonInput={(e) => setNewClassName(e.detail.value ?? "")}
-              />
+              <IonInput placeholder="Class name" value={newClassName} onIonInput={(e) => setNewClassName(e.detail.value ?? "")} />
             </IonItem>
             <IonButton expand="block" onClick={onCreate}>
               Create
@@ -118,11 +90,7 @@ const Tab1: React.FC = () => {
           </IonCardHeader>
           <IonCardContent>
             <IonItem>
-              <IonInput
-                placeholder="Enter code"
-                value={joinCode}
-                onIonInput={(e) => setJoinCode(e.detail.value ?? "")}
-              />
+              <IonInput placeholder="Enter code" value={joinCode} onIonInput={(e) => setJoinCode(e.detail.value ?? "")} />
             </IonItem>
             <IonButton
               expand="block"
@@ -150,18 +118,14 @@ const Tab1: React.FC = () => {
         <IonList>
           {classes.map((c) => (
             <div key={c.id}>
-              <IonItem
-                button
-                lines="full"
-                onClick={() => setActiveClassId(activeClassId === c.id ? "" : c.id)}
-              >
+              <IonItem button lines="full" onClick={() => setActiveClassId(activeClassId === c.id ? "" : c.id)}>
                 <IonLabel>
                   <h2>{c.name}</h2>
                   <p>Share code: {c.code}</p>
                 </IonLabel>
               </IonItem>
               {activeClassId === c.id && (
-                <IonButton className="ion-margin" onClick={() => history.push(`/class?id=${c.id}`)}>
+                <IonButton className="ion-margin" onClick={() => history.push(`/devcon-scanner/class?id=${c.id}`)}>
                   Open Class
                 </IonButton>
               )}
@@ -172,18 +136,10 @@ const Tab1: React.FC = () => {
                   </IonCardHeader>
                   <IonCardContent>
                     <IonItem>
-                      <IonInput
-                        placeholder="Student ID (barcode)"
-                        value={studentId}
-                        onIonInput={(e) => setStudentId(e.detail.value ?? "")}
-                      />
+                      <IonInput placeholder="Student ID (barcode)" value={studentId} onIonInput={(e) => setStudentId(e.detail.value ?? "")} />
                     </IonItem>
                     <IonItem>
-                      <IonInput
-                        placeholder="Student Name"
-                        value={studentName}
-                        onIonInput={(e) => setStudentName(e.detail.value ?? "")}
-                      />
+                      <IonInput placeholder="Student Name" value={studentName} onIonInput={(e) => setStudentName(e.detail.value ?? "")} />
                     </IonItem>
                     <IonButton
                       expand="block"

@@ -4,7 +4,6 @@ import {
   IonButtons,
   IonCard,
   IonCardContent,
-  IonChip,
   IonContent,
   IonHeader,
   IonIcon,
@@ -18,6 +17,7 @@ import {
   IonTitle,
   IonToolbar,
   useIonToast,
+  IonAlert, // Import IonAlert for confirmation dialog
 } from "@ionic/react";
 import { downloadOutline, personRemoveOutline } from "ionicons/icons";
 import { useHistory, useLocation } from "react-router-dom";
@@ -30,10 +30,14 @@ import {
   listScanTypes,
   addScanType,
   deleteScanType,
+  getClassDetails, // << ADDED
+  updateClass, // << ADDED
+  deleteClass, // << ADDED
   type AttendanceScanType,
   type ClassModerator,
   type Student,
   type ScanType,
+  type Class, // << ADDED
 } from "../utils/api";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
@@ -53,17 +57,9 @@ function extractStudentRow(raw: Record<string, any>): { student_id: string; name
     return "";
   };
   // ID detection: "student id", "id", "code"
-  const studentId =
-    findVal(/^(student\s*id)$/i) ||
-    findVal(/\bstudent\s*id\b/i) ||
-    findVal(/^id$/i) ||
-    findVal(/^code$/i);
+  const studentId = findVal(/^(student\s*id)$/i) || findVal(/\bstudent\s*id\b/i) || findVal(/^id$/i) || findVal(/^code$/i);
   // Name detection: "name", "student name", Google Forms header variant with parentheses
-  const name =
-    findVal(/^name$/i) ||
-    findVal(/^student\s*name$/i) ||
-    findVal(/student\s*name.*lastname.*firstname/i) ||
-    findVal(/\(lastname,\s*firstname/i);
+  const name = findVal(/^name$/i) || findVal(/^student\s*name$/i) || findVal(/student\s*name.*lastname.*firstname/i) || findVal(/\(lastname,\s*firstname/i);
   const sid = String(studentId || "").trim();
   const nm = String(name || "").trim();
   if (!sid || !nm) return null;
@@ -75,6 +71,11 @@ const ClassPage: React.FC = () => {
   const query = useQuery();
   const history = useHistory();
   const classId = query.get("id") || "";
+
+  const [classDetails, setClassDetails] = useState<Class | null>(null);
+  const [editClassName, setEditClassName] = useState<string>("");
+  const [showDeleteAlert, setShowDeleteAlert] = useState<boolean>(false);
+
   const [tab, setTab] = useState<string>("attendance");
   const [attendance, setAttendance] = useState<any[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
@@ -82,21 +83,51 @@ const ClassPage: React.FC = () => {
   const [scanTypes, setScanTypes] = useState<ScanType[]>([]);
   const [newScanTypeName, setNewScanTypeName] = useState<string>("");
 
+  // Function to fetch all class-related data
+  const fetchClassData = async (id: string) => {
+    if (!id) return;
+    try {
+      // Fetch Class Details
+      const details = await getClassDetails(id);
+      setClassDetails(details);
+      setEditClassName(details.name); // Initialize rename field
+
+      // Fetch other data
+      listAttendance(id, 500).then(setAttendance);
+      listStudents(id).then(setStudents);
+      listModerators(id).then(setModerators);
+      listScanTypes(id).then(setScanTypes);
+    } catch (e: any) {
+      present({ message: e.message, duration: 2000, color: "danger" });
+    }
+  };
+
   useEffect(() => {
-    if (!classId) return;
-    listAttendance(classId, 500)
-      .then(setAttendance)
-      .catch((e) => present({ message: e.message, duration: 2000, color: "danger" }));
-    listStudents(classId)
-      .then(setStudents)
-      .catch((e) => present({ message: e.message, duration: 2000, color: "danger" }));
-    listModerators(classId)
-      .then(setModerators)
-      .catch((e) => present({ message: e.message, duration: 2000, color: "danger" }));
-    listScanTypes(classId)
-      .then(setScanTypes)
-      .catch((e) => present({ message: e.message, duration: 2000, color: "danger" }));
+    if (classId) {
+      fetchClassData(classId);
+    }
   }, [classId]);
+
+  const handleRenameClass = async () => {
+    if (!classDetails || !editClassName.trim() || editClassName.trim() === classDetails.name) return;
+    try {
+      const updatedClass = await updateClass(classId, { name: editClassName.trim() });
+      setClassDetails(updatedClass);
+      present({ message: "Class renamed successfully! 🎉", duration: 1600, color: "success" });
+    } catch (e: any) {
+      present({ message: e.message ?? "Failed to rename class", duration: 2000, color: "danger" });
+    }
+  };
+
+  const handleDeleteClass = async () => {
+    try {
+      await deleteClass(classId);
+      present({ message: "Class deleted successfully! 👋", duration: 1600, color: "success" });
+      history.push("/classes");
+    } catch (e: any) {
+      present({ message: e.message ?? "Failed to delete class", duration: 2000, color: "danger" });
+    }
+  };
 
   const exportAttendanceCsv = () => {
     const rows = attendance.map((a) => ({
@@ -109,7 +140,7 @@ const ClassPage: React.FC = () => {
       RecordID: a.id,
     }));
     const csv = Papa.unparse(rows, { quotes: true });
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-is-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -123,9 +154,7 @@ const ClassPage: React.FC = () => {
       if (file.name.toLowerCase().endsWith(".csv")) {
         const text = await file.text();
         const { data } = Papa.parse(text, { header: true, skipEmptyLines: true });
-        const rows = (data as any[])
-          .map((r) => extractStudentRow(r as Record<string, any>))
-          .filter((r): r is { student_id: string; name: string } => !!r);
+        const rows = (data as any[]).map((r) => extractStudentRow(r as Record<string, any>)).filter((r): r is { student_id: string; name: string } => !!r);
         const cnt = await bulkAddStudents(classId, rows);
         present({ message: `Imported ${cnt} students`, duration: 1600, color: "success" });
         setStudents(await listStudents(classId));
@@ -134,9 +163,7 @@ const ClassPage: React.FC = () => {
         const wb = XLSX.read(buf, { type: "array" });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const json = XLSX.utils.sheet_to_json(ws, { raw: false });
-        const rows = (json as any[])
-          .map((r) => extractStudentRow(r as Record<string, any>))
-          .filter((r): r is { student_id: string; name: string } => !!r);
+        const rows = (json as any[]).map((r) => extractStudentRow(r as Record<string, any>)).filter((r): r is { student_id: string; name: string } => !!r);
         const cnt = await bulkAddStudents(classId, rows);
         present({ message: `Imported ${cnt} students`, duration: 1600, color: "success" });
         setStudents(await listStudents(classId));
@@ -146,6 +173,19 @@ const ClassPage: React.FC = () => {
     }
   };
 
+  if (!classDetails) {
+    return (
+      <IonPage>
+        <IonHeader>
+          <IonToolbar>
+            <IonTitle>Loading Class...</IonTitle>
+          </IonToolbar>
+        </IonHeader>
+        <IonContent></IonContent>
+      </IonPage>
+    );
+  }
+
   return (
     <IonPage>
       <IonHeader>
@@ -153,7 +193,10 @@ const ClassPage: React.FC = () => {
           <IonButtons slot="start">
             <IonButton onClick={() => history.goBack()}>Back</IonButton>
           </IonButtons>
-          <IonTitle>Class</IonTitle>
+          <IonTitle>
+            {classDetails.name} ({classDetails.code})
+          </IonTitle>{" "}
+          {/* Display class name/code */}
           <IonButtons slot="end">
             {tab === "attendance" && (
               <IonButton onClick={exportAttendanceCsv}>
@@ -164,14 +207,12 @@ const ClassPage: React.FC = () => {
           </IonButtons>
         </IonToolbar>
         <IonToolbar>
-          <IonSegment
-            value={tab}
-            onIonChange={(e) => setTab((e.detail.value as string) || "attendance")}
-          >
+          <IonSegment value={tab} onIonChange={(e) => setTab((e.detail.value as string) || "attendance")}>
             <IonSegmentButton value="attendance">Attendance</IonSegmentButton>
             <IonSegmentButton value="students">Students</IonSegmentButton>
             <IonSegmentButton value="moderators">Moderators</IonSegmentButton>
             <IonSegmentButton value="scanTypes">Scan Types</IonSegmentButton>
+            <IonSegmentButton value="settings">Settings</IonSegmentButton>
           </IonSegment>
         </IonToolbar>
       </IonHeader>
@@ -182,12 +223,11 @@ const ClassPage: React.FC = () => {
               <IonItem key={a.id} lines="full">
                 <IonLabel>
                   <h3>
-                    {a.type}
+                    {a.scan_types?.name || (a.type as AttendanceScanType) || ""}
                     {a.note ? ` - ${a.note}` : ""}
                   </h3>
                   <p>
-                    {new Date(a.created_at).toLocaleString()} • {a.students?.name ?? ""} (
-                    {a.students?.student_id ?? a.scanned_value})
+                    {new Date(a.created_at).toLocaleString()} • {a.students?.name ?? ""} ({a.students?.student_id ?? a.scanned_value})
                   </p>
                 </IonLabel>
               </IonItem>
@@ -260,11 +300,7 @@ const ClassPage: React.FC = () => {
             <IonCardContent>
               <h3>Scan Types</h3>
               <IonItem>
-                <IonInput
-                  placeholder="e.g. Morning IN"
-                  value={newScanTypeName}
-                  onIonInput={(e) => setNewScanTypeName(e.detail.value ?? "")}
-                />
+                <IonInput placeholder="e.g. Morning IN" value={newScanTypeName} onIonInput={(e) => setNewScanTypeName(e.detail.value ?? "")} />
                 <IonButton
                   onClick={async () => {
                     if (!newScanTypeName.trim()) return;
@@ -303,6 +339,55 @@ const ClassPage: React.FC = () => {
                 ))}
               </IonList>
             </IonCardContent>
+          </IonCard>
+        )}
+
+        {tab === "settings" && (
+          <IonCard>
+            <IonCardContent>
+              <IonList>
+                {/* Rename Class */}
+                <IonItem lines="full">
+                  <IonLabel position="stacked">Rename Class</IonLabel>
+                  <IonInput value={editClassName} placeholder="New Class Name" onIonChange={(e) => setEditClassName(e.detail.value ?? "")} />
+                  <IonButton slot="end" onClick={handleRenameClass} disabled={!editClassName.trim() || editClassName.trim() === classDetails.name}>
+                    Save
+                  </IonButton>
+                </IonItem>
+
+                {/* Class Code (Read-only for simplicity, can be made editable) */}
+                <IonItem lines="full">
+                  <IonLabel>Class Code</IonLabel>
+                  <IonInput value={classDetails.code} readonly />
+                </IonItem>
+
+                {/* Delete Class */}
+                <IonItem lines="full">
+                  <IonLabel color="danger">Delete Class</IonLabel>
+                  <IonButton slot="end" color="danger" onClick={() => setShowDeleteAlert(true)}>
+                    Delete
+                  </IonButton>
+                </IonItem>
+              </IonList>
+            </IonCardContent>
+            {/* Delete Confirmation Alert */}
+            <IonAlert
+              isOpen={showDeleteAlert}
+              onDidDismiss={() => setShowDeleteAlert(false)}
+              header={"Confirm Deletion"}
+              message={`Are you sure you want to delete the class **${classDetails.name}**? This action cannot be undone.`}
+              buttons={[
+                {
+                  text: "Cancel",
+                  role: "cancel",
+                },
+                {
+                  text: "Delete",
+                  cssClass: "alert-button-danger",
+                  handler: handleDeleteClass,
+                },
+              ]}
+            />
           </IonCard>
         )}
       </IonContent>
