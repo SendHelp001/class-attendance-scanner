@@ -45,38 +45,41 @@ const App: React.FC = () => {
   const { session, loading } = useAuth();
   if (loading) return null;
   const isAuthed = !!session;
+
   return (
     <IonApp>
       <IonReactRouter>
         {isAuthed ? (
           <IonTabs>
             <IonRouterOutlet>
-              <Route exact path="/devcon-scanner/tab1">
+              <Route exact path="/tab1">
                 <Tab1 />
               </Route>
-              <Route exact path="/devcon-scanner/tab2">
+              <Route exact path="/tab2">
                 <Tab2 />
               </Route>
-              <Route path="/devcon-scanner/profile">
+              <Route path="/profile">
                 <ProfilePage />
               </Route>
-              <Route path="/devcon-scanner/class">
+
+              <Route path="/class">
                 <ClassPage />
               </Route>
               <Route exact path="/">
-                <Redirect to="/devcon-scanner/tab1" />
+                <Redirect to="/tab1" />
               </Route>
             </IonRouterOutlet>
+
             <IonTabBar slot="bottom">
-              <IonTabButton tab="tab1" href="/devcon-scanner/tab1">
+              <IonTabButton tab="tab1" href="/tab1">
                 <IonIcon aria-hidden="true" icon={bookOutline} />
                 <IonLabel>Classes</IonLabel>
               </IonTabButton>
-              <IonTabButton tab="tab2" href="/devcon-scanner/tab2">
+              <IonTabButton tab="tab2" href="/tab2">
                 <IonIcon aria-hidden="true" icon={barcodeOutline} />
                 <IonLabel>Scan</IonLabel>
               </IonTabButton>
-              <IonTabButton tab="profile" href="/devcon-scanner/profile">
+              <IonTabButton tab="profile" href="/profile">
                 <IonIcon aria-hidden="true" icon={listOutline} />
                 <IonLabel>Profile</IonLabel>
               </IonTabButton>
