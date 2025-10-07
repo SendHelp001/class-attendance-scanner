@@ -25,13 +25,6 @@ import "@ionic/react/css/text-transformation.css";
 import "@ionic/react/css/flex-utils.css";
 import "@ionic/react/css/display.css";
 
-/**
- * Ionic Dark Mode
- * -----------------------------------------------------
- * For more info, please see:
- * https://ionicframework.com/docs/theming/dark-mode
- */
-
 /* import '@ionic/react/css/palettes/dark.always.css'; */
 /* import '@ionic/react/css/palettes/dark.class.css'; */
 import "@ionic/react/css/palettes/dark.system.css";
@@ -40,6 +33,7 @@ import "@ionic/react/css/palettes/dark.system.css";
 import "./theme/variables.css";
 
 setupIonicReact();
+const BASE_PATH = "/devcon-scanner";
 
 const App: React.FC = () => {
   const { session, loading } = useAuth();
@@ -52,34 +46,34 @@ const App: React.FC = () => {
         {isAuthed ? (
           <IonTabs>
             <IonRouterOutlet>
-              <Route exact path="/tab1">
+              <Route exact path={`${BASE_PATH}/tab1`}>
                 <Tab1 />
               </Route>
-              <Route exact path="/tab2">
+              <Route exact path={`${BASE_PATH}/tab2`}>
                 <Tab2 />
               </Route>
-              <Route path="/profile">
+              <Route path={`${BASE_PATH}/profile`}>
                 <ProfilePage />
               </Route>
-
-              <Route path="/class">
+              <Route path={`${BASE_PATH}/class`}>
                 <ClassPage />
               </Route>
+
               <Route exact path="/">
-                <Redirect to="/tab1" />
+                <Redirect to={`${BASE_PATH}/tab1`} />
               </Route>
             </IonRouterOutlet>
 
             <IonTabBar slot="bottom">
-              <IonTabButton tab="tab1" href="/tab1">
+              <IonTabButton tab="tab1" href={`${BASE_PATH}/tab1`}>
                 <IonIcon aria-hidden="true" icon={bookOutline} />
                 <IonLabel>Classes</IonLabel>
               </IonTabButton>
-              <IonTabButton tab="tab2" href="/tab2">
+              <IonTabButton tab="tab2" href={`${BASE_PATH}/tab2`}>
                 <IonIcon aria-hidden="true" icon={barcodeOutline} />
                 <IonLabel>Scan</IonLabel>
               </IonTabButton>
-              <IonTabButton tab="profile" href="/profile">
+              <IonTabButton tab="profile" href={`${BASE_PATH}/profile`}>
                 <IonIcon aria-hidden="true" icon={listOutline} />
                 <IonLabel>Profile</IonLabel>
               </IonTabButton>
@@ -87,11 +81,11 @@ const App: React.FC = () => {
           </IonTabs>
         ) : (
           <IonRouterOutlet>
-            <Route exact path="/devcon-scanner/auth">
+            <Route exact path={`${BASE_PATH}/auth`}>
               <Auth />
             </Route>
             <Route>
-              <Redirect to="/devcon-scanner/auth" />
+              <Redirect to={`${BASE_PATH}/auth`} />
             </Route>
           </IonRouterOutlet>
         )}

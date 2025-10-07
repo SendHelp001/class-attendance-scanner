@@ -136,8 +136,8 @@ const ClassPage: React.FC = () => {
   // Refresher handler calls the main fetch function
   const handleRefresh = async (event: CustomEvent) => {
     await fetchClassData(classId);
-    event.detail.complete(); // Signal the refresher that loading is done
-    present({ message: "Class data refreshed! 🔄", duration: 1500, color: "secondary" });
+    event.detail.complete();
+    present({ message: "Class data refreshed!", duration: 1500, color: "secondary" });
   };
 
   useEffect(() => {
@@ -177,7 +177,7 @@ const ClassPage: React.FC = () => {
     try {
       const updatedClass = await updateClass(classId, { name: editClassName.trim() });
       setClassDetails(updatedClass);
-      present({ message: "Class renamed successfully! 🎉", duration: 1600, color: "success" });
+      present({ message: "Class renamed successfully! ", duration: 1600, color: "success" });
     } catch (e: any) {
       present({ message: e.message ?? "Failed to rename class", duration: 2000, color: "danger" });
     }
@@ -186,7 +186,7 @@ const ClassPage: React.FC = () => {
   const handleDeleteClass = async () => {
     try {
       await deleteClass(classId);
-      present({ message: "Class deleted successfully! 👋", duration: 1600, color: "success" });
+      present({ message: "Class deleted successfully! ", duration: 1600, color: "success" });
       history.push("/classes");
     } catch (e: any) {
       present({ message: e.message ?? "Failed to delete class", duration: 2000, color: "danger" });
