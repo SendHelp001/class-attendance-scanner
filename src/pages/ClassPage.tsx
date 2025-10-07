@@ -27,9 +27,13 @@ import {
   listModerators,
   listStudents,
   removeModerator,
+  listScanTypes,
+  addScanType,
+  deleteScanType,
   type AttendanceScanType,
   type ClassModerator,
   type Student,
+  type ScanType,
 } from "../utils/api";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
@@ -75,6 +79,8 @@ const ClassPage: React.FC = () => {
   const [attendance, setAttendance] = useState<any[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
   const [moderators, setModerators] = useState<ClassModerator[]>([]);
+  const [scanTypes, setScanTypes] = useState<ScanType[]>([]);
+  const [newScanTypeName, setNewScanTypeName] = useState<string>("");
 
   useEffect(() => {
     if (!classId) return;
@@ -87,13 +93,16 @@ const ClassPage: React.FC = () => {
     listModerators(classId)
       .then(setModerators)
       .catch((e) => present({ message: e.message, duration: 2000, color: "danger" }));
+    listScanTypes(classId)
+      .then(setScanTypes)
+      .catch((e) => present({ message: e.message, duration: 2000, color: "danger" }));
   }, [classId]);
 
   const exportAttendanceCsv = () => {
     const rows = attendance.map((a) => ({
       Timestamp: new Date(a.created_at).toLocaleString(),
       ClassID: a.class_id,
-      Type: a.type as AttendanceScanType,
+      Type: a.scan_types?.name || (a.type as AttendanceScanType) || "",
       Note: a.note ?? "",
       StudentName: a.students?.name ?? "",
       StudentID: a.students?.student_id ?? a.scanned_value,
@@ -162,6 +171,7 @@ const ClassPage: React.FC = () => {
             <IonSegmentButton value="attendance">Attendance</IonSegmentButton>
             <IonSegmentButton value="students">Students</IonSegmentButton>
             <IonSegmentButton value="moderators">Moderators</IonSegmentButton>
+            <IonSegmentButton value="scanTypes">Scan Types</IonSegmentButton>
           </IonSegment>
         </IonToolbar>
       </IonHeader>
@@ -211,31 +221,89 @@ const ClassPage: React.FC = () => {
         )}
 
         {tab === "moderators" && (
-          <IonList>
-            {moderators.map((m) => (
-              <IonItem key={m.id} lines="full">
-                <IonLabel>
-                  <p>{m.user_id}</p>
-                </IonLabel>
+          <>
+            <IonCard>
+              <IonCardContent>
+                <h3>Moderators</h3>
+                <IonList>
+                  {moderators.map((m) => (
+                    <IonItem key={m.id} lines="full">
+                      <IonLabel>
+                        <p>{m.profiles?.display_name || m.profiles?.email || m.user_id}</p>
+                      </IonLabel>
+                      <IonButton
+                        slot="end"
+                        color="danger"
+                        fill="clear"
+                        onClick={async () => {
+                          try {
+                            await removeModerator(classId, m.user_id);
+                            setModerators(await listModerators(classId));
+                            present({ message: "Removed", duration: 1000 });
+                          } catch (e: any) {
+                            present({ message: e.message, duration: 2000, color: "danger" });
+                          }
+                        }}
+                      >
+                        <IonIcon slot="icon-only" icon={personRemoveOutline} />
+                      </IonButton>
+                    </IonItem>
+                  ))}
+                </IonList>
+              </IonCardContent>
+            </IonCard>
+          </>
+        )}
+
+        {tab === "scanTypes" && (
+          <IonCard>
+            <IonCardContent>
+              <h3>Scan Types</h3>
+              <IonItem>
+                <IonInput
+                  placeholder="e.g. Morning IN"
+                  value={newScanTypeName}
+                  onIonInput={(e) => setNewScanTypeName(e.detail.value ?? "")}
+                />
                 <IonButton
-                  slot="end"
-                  color="danger"
-                  fill="clear"
                   onClick={async () => {
+                    if (!newScanTypeName.trim()) return;
                     try {
-                      await removeModerator(classId, m.user_id);
-                      setModerators(await listModerators(classId));
-                      present({ message: "Removed", duration: 1000 });
+                      await addScanType(classId, newScanTypeName.trim());
+                      setNewScanTypeName("");
+                      setScanTypes(await listScanTypes(classId));
                     } catch (e: any) {
                       present({ message: e.message, duration: 2000, color: "danger" });
                     }
                   }}
                 >
-                  <IonIcon slot="icon-only" icon={personRemoveOutline} />
+                  Add
                 </IonButton>
               </IonItem>
-            ))}
-          </IonList>
+              <IonList>
+                {scanTypes.map((t) => (
+                  <IonItem key={t.id} lines="full">
+                    <IonLabel>{t.name}</IonLabel>
+                    <IonButton
+                      slot="end"
+                      color="danger"
+                      fill="clear"
+                      onClick={async () => {
+                        try {
+                          await deleteScanType(t.id);
+                          setScanTypes(await listScanTypes(classId));
+                        } catch (e: any) {
+                          present({ message: e.message, duration: 2000, color: "danger" });
+                        }
+                      }}
+                    >
+                      Remove
+                    </IonButton>
+                  </IonItem>
+                ))}
+              </IonList>
+            </IonCardContent>
+          </IonCard>
         )}
       </IonContent>
     </IonPage>

@@ -9,8 +9,6 @@ import {
   IonLabel,
   IonList,
   IonPage,
-  IonRadio,
-  IonRadioGroup,
   IonSelect,
   IonSelectOption,
   IonTitle,
@@ -18,23 +16,44 @@ import {
   useIonToast,
 } from "@ionic/react";
 import "./Tab2.css";
-import { AttendanceScanType, ClassRoom, listMyClasses, scanAttendance } from "../utils/api";
+import {
+  ClassRoom,
+  listMyClasses,
+  scanAttendance,
+  listScanTypes,
+  type ScanType,
+} from "../utils/api";
 import { BarcodeScanner } from "@capacitor-mlkit/barcode-scanning";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 
 const Tab2: React.FC = () => {
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>("");
-  const [type, setType] = useState<AttendanceScanType>("IN");
   const [present] = useIonToast();
-  const [customNote, setCustomNote] = useState<string>("");
   const [scannerMode, setScannerMode] = useState<"native" | "web">("native");
+  const [scanTypes, setScanTypes] = useState<ScanType[]>([]);
+  const [selectedTypeId, setSelectedTypeId] = useState<string>("");
 
   useEffect(() => {
     listMyClasses()
       .then(setClasses)
       .catch((e) => present({ message: e.message, duration: 2000, color: "danger" }));
   }, []);
+
+  useEffect(() => {
+    if (!selectedClassId) {
+      setScanTypes([]);
+      setSelectedTypeId("");
+      return;
+    }
+    listScanTypes(selectedClassId)
+      .then((types) => {
+        setScanTypes(types);
+        if (types.length && !selectedTypeId) setSelectedTypeId(types[0].id);
+      })
+      .catch((e) => present({ message: e.message, duration: 2000, color: "danger" }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedClassId]);
 
   const ensurePermission = async () => {
     const { camera } = await BarcodeScanner.checkPermissions();
@@ -46,6 +65,10 @@ const Tab2: React.FC = () => {
   const onScan = async () => {
     if (!selectedClassId) {
       present({ message: "Select a class", duration: 1500 });
+      return;
+    }
+    if (!selectedTypeId) {
+      present({ message: "Select a scan type", duration: 1500 });
       return;
     }
     try {
@@ -60,7 +83,6 @@ const Tab2: React.FC = () => {
         if (!barcodes?.length) return;
         value = barcodes[0].rawValue ?? "";
       } else {
-        // Web fallback using ZXing
         const codeReader = new BrowserMultiFormatReader();
         const video = document.createElement("video");
         video.style.position = "fixed";
@@ -81,8 +103,7 @@ const Tab2: React.FC = () => {
         }
       }
       if (!value) return;
-      const noteToSend = type === "CUSTOM" ? customNote?.trim() || "CUSTOM" : undefined;
-      const { student } = await scanAttendance(selectedClassId, value, type, noteToSend);
+      const { student } = await scanAttendance(selectedClassId, value, selectedTypeId as any);
       present({
         message: student ? `Marked ${student.name}` : `Recorded scan: ${value}`,
         duration: 1600,
@@ -128,30 +149,23 @@ const Tab2: React.FC = () => {
             </IonSelect>
           </IonItem>
 
-          <IonRadioGroup value={type} onIonChange={(e) => setType(e.detail.value)}>
-            <IonItem>
-              <IonLabel>IN</IonLabel>
-              <IonRadio value="IN" />
-            </IonItem>
-            <IonItem>
-              <IonLabel>OUT</IonLabel>
-              <IonRadio value="OUT" />
-            </IonItem>
-            <IonItem>
-              <IonLabel>CUSTOM</IonLabel>
-              <IonRadio value="CUSTOM" />
-            </IonItem>
-          </IonRadioGroup>
-
-          {type === "CUSTOM" && (
-            <IonItem>
-              <IonLabel position="floating">Custom description</IonLabel>
-              <IonInput
-                value={customNote}
-                onIonChange={(e: any) => setCustomNote(e.detail.value ?? "")}
-              />
-            </IonItem>
-          )}
+          <IonItem>
+            <IonLabel position="stacked">Scan type</IonLabel>
+            <IonSelect
+              value={selectedTypeId}
+              placeholder={
+                scanTypes.length ? "Select type" : "No types configured (add in Class > Scan Types)"
+              }
+              onIonChange={(e) => setSelectedTypeId(e.detail.value)}
+              disabled={!scanTypes.length}
+            >
+              {scanTypes.map((t) => (
+                <IonSelectOption key={t.id} value={t.id}>
+                  {t.name}
+                </IonSelectOption>
+              ))}
+            </IonSelect>
+          </IonItem>
         </IonList>
       </IonContent>
     </IonPage>

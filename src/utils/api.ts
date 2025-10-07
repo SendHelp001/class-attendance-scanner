@@ -101,13 +101,21 @@ export async function removeModerator(classId: UUID, userId: UUID): Promise<void
 }
 
 export async function listModerators(classId: UUID): Promise<ClassModerator[]> {
-	 const { data, error } = await supabase
+	 // Prefer nested profile if the FK is defined; otherwise fall back to plain select
+	 const nested = await supabase
 		 .from("class_moderators")
 		 .select("id, class_id, user_id, created_at, profiles:profiles(display_name, email)")
 		 .eq("class_id", classId)
 		 .order("created_at", { ascending: true });
-	 if (error) throw error;
-	 return data as ClassModerator[];
+	 if (!nested.error && nested.data) return nested.data as ClassModerator[];
+
+	 const plain = await supabase
+		 .from("class_moderators")
+		 .select("*")
+		 .eq("class_id", classId)
+		 .order("created_at", { ascending: true });
+	 if (plain.error) throw plain.error;
+	 return plain.data as ClassModerator[];
 }
 
 export async function joinClassByCode(code: string): Promise<ClassRoom> {
@@ -180,15 +188,22 @@ export async function scanAttendance(
         scanned_by: userId,
         note: note ?? null,
     };
-    if (isTypeId) insertPayload.type_id = typeOrTypeId as UUID; else insertPayload.type = typeOrTypeId as AttendanceScanType;
+    let type: AttendanceScanType | UUID;
+    if (isTypeId) {
+        insertPayload.type_id = typeOrTypeId as UUID;
+        type = typeOrTypeId as UUID;
+    } else {
+        insertPayload.type = typeOrTypeId as AttendanceScanType;
+        type = typeOrTypeId as AttendanceScanType;
+    }
     const { data, error } = await supabase
         .from("attendance")
         .insert(insertPayload)
         .select()
         .single();
-    
+
     if (error) throw error;
-    
+
     // Write a log entry
     await supabase.from("class_logs").insert({
         class_id: classId,
@@ -196,7 +211,7 @@ export async function scanAttendance(
         action: "scan",
         metadata: { type, scannedStudentIdValue, matchedStudent: !!student },
     });
-    
+
     return { record: data as AttendanceRecord, student };
 }
 
