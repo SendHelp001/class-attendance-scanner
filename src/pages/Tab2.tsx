@@ -4,6 +4,7 @@ import {
   IonButtons,
   IonContent,
   IonHeader,
+  IonInput,
   IonItem,
   IonLabel,
   IonList,
@@ -25,6 +26,7 @@ const Tab2: React.FC = () => {
   const [selectedClassId, setSelectedClassId] = useState<string>("");
   const [type, setType] = useState<AttendanceScanType>("IN");
   const [present] = useIonToast();
+  const [customNote, setCustomNote] = useState<string>("");
 
   useEffect(() => {
     listMyClasses()
@@ -54,7 +56,8 @@ const Tab2: React.FC = () => {
       if (!barcodes?.length) return;
       const value = barcodes[0].rawValue ?? "";
       if (!value) return;
-      const { student } = await scanAttendance(selectedClassId, value, type);
+      const noteToSend = type === "CUSTOM" ? customNote?.trim() || "CUSTOM" : undefined;
+      const { student } = await scanAttendance(selectedClassId, value, type, noteToSend);
       present({
         message: student ? `Marked ${student.name}` : `Recorded scan: ${value}`,
         duration: 1600,
@@ -106,6 +109,16 @@ const Tab2: React.FC = () => {
               <IonRadio value="CUSTOM" />
             </IonItem>
           </IonRadioGroup>
+
+          {type === "CUSTOM" && (
+            <IonItem>
+              <IonLabel position="floating">Custom description</IonLabel>
+              <IonInput
+                value={customNote}
+                onIonChange={(e: any) => setCustomNote(e.detail.value ?? "")}
+              />
+            </IonItem>
+          )}
         </IonList>
       </IonContent>
     </IonPage>
