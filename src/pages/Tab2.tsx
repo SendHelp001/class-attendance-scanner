@@ -1,15 +1,22 @@
-import { useEffect, useState } from "react";
-import { IonButton, IonButtons, IonContent, IonHeader, IonItem, IonLabel, IonList, IonPage, IonSelect, IonSelectOption, IonTitle, IonToolbar, useIonToast } from "@ionic/react";
-import "./Tab2.css";
+import { useEffect, useState, useRef } from "react";
+import { IonButton, IonButtons, IonContent, IonHeader, IonItem, IonLabel, IonList, IonPage, IonSelect, IonSelectOption, IonTitle, IonToolbar, IonModal, useIonToast, IonFooter } from "@ionic/react";
+import { BrowserMultiFormatReader, IScannerControls } from "@zxing/browser";
+import { Result } from "@zxing/library";
 import { ClassRoom, listMyClasses, scanAttendance, listScanTypes, type ScanType } from "../utils/api";
-import { BrowserMultiFormatReader } from "@zxing/browser";
+import "./Tab2.css";
 
 const Tab2: React.FC = () => {
   const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string>("");
-  const [present] = useIonToast();
   const [scanTypes, setScanTypes] = useState<ScanType[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<string>("");
+  const [showScanner, setShowScanner] = useState(false);
+  const [videoInputDevices, setVideoInputDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
+  const [present] = useIonToast();
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const controlsRef = useRef<IScannerControls | null>(null);
+  const codeReader = useRef(new BrowserMultiFormatReader());
 
   useEffect(() => {
     listMyClasses()
@@ -29,58 +36,77 @@ const Tab2: React.FC = () => {
         if (types.length && !selectedTypeId) setSelectedTypeId(types[0].id);
       })
       .catch((e) => present({ message: e.message, duration: 2000, color: "danger" }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedClassId]);
 
-  const onScan = async () => {
-    if (!selectedClassId) {
-      present({ message: "Select a class", duration: 1500 });
+  // --- Fetch available cameras ---
+  useEffect(() => {
+    BrowserMultiFormatReader.listVideoInputDevices()
+      .then((devices) => {
+        setVideoInputDevices(devices);
+        if (devices.length > 0) setSelectedDeviceId(devices[0].deviceId);
+      })
+      .catch(() =>
+        present({
+          message: "Unable to access camera devices",
+          duration: 2000,
+          color: "danger",
+        })
+      );
+  }, []);
+
+  // --- Start scanning ---
+  const startScan = async () => {
+    if (!selectedClassId || !selectedTypeId) {
+      present({ message: "Select class and scan type first", duration: 1500 });
       return;
     }
-    if (!selectedTypeId) {
-      present({ message: "Select a scan type", duration: 1500 });
-      return;
-    }
+    setShowScanner(true);
 
-    // --- Start Web Scanning Logic (Single Scan) ---
-    const codeReader = new BrowserMultiFormatReader();
-    const video = document.createElement("video");
+    setTimeout(async () => {
+      if (videoRef.current) {
+        try {
+          controlsRef.current = await codeReader.current.decodeFromVideoDevice(selectedDeviceId || undefined, videoRef.current, async (result: Result | undefined, err) => {
+            if (result) {
+              const text = result.getText();
+              await handleScanResult(text);
+            }
+          });
+        } catch (e: any) {
+          present({
+            message: e.message ?? "Camera access failed",
+            duration: 2000,
+            color: "danger",
+          });
+          stopScan();
+        }
+      }
+    }, 300);
+  };
 
-    // Configure video element for full-screen view
-    video.style.position = "fixed";
-    video.style.inset = "0";
-    video.style.width = "100%";
-    video.style.height = "100%";
-    video.style.objectFit = "cover";
-    video.style.zIndex = "9999";
-    document.body.appendChild(video);
+  // --- Stop scanning & cleanup ---
+  const stopScan = () => {
+    controlsRef.current?.stop();
+    controlsRef.current = null;
+    setShowScanner(false);
+  };
 
-    let value = "";
-
+  // --- Handle Scan Result ---
+  const handleScanResult = async (value: string) => {
     try {
-      const result = await codeReader.decodeOnceFromVideoDevice(undefined, video);
-      value = result?.getText() ?? "";
-
-      if (!value) return;
-
-      // Process the scan result
       const { student } = await scanAttendance(selectedClassId, value, selectedTypeId as any);
 
       present({
         message: student ? `Marked ${student.name}` : `Recorded scan: ${value}`,
-        duration: 1600,
+        duration: 1500,
         color: "success",
       });
+      stopScan(); // Stop after successful scan (or make it continuous if desired)
     } catch (e: any) {
-      present({ message: e.message ?? "Scan failed", duration: 2000, color: "danger" });
-    } finally {
-      try {
-        const stream = (video as any).srcObject as MediaStream;
-        if (stream) {
-          stream.getTracks().forEach((track) => track.stop());
-        }
-      } catch {}
-      video.remove();
+      present({
+        message: e.message ?? "Failed to record attendance",
+        duration: 2000,
+        color: "danger",
+      });
     }
   };
 
@@ -88,9 +114,9 @@ const Tab2: React.FC = () => {
     <IonPage>
       <IonHeader>
         <IonToolbar>
-          <IonTitle>Scan</IonTitle>
+          <IonTitle>Scan Attendance</IonTitle>
           <IonButtons slot="end">
-            <IonButton onClick={onScan}>Start Scan</IonButton>
+            <IonButton onClick={startScan}>Start Scan</IonButton>
           </IonButtons>
         </IonToolbar>
       </IonHeader>
@@ -108,7 +134,7 @@ const Tab2: React.FC = () => {
           </IonItem>
 
           <IonItem>
-            <IonLabel position="stacked">Scan type</IonLabel>
+            <IonLabel>Scan Type</IonLabel>
             <IonSelect
               value={selectedTypeId}
               placeholder={scanTypes.length ? "Select type" : "No types configured (add in Class > Scan Types)"}
@@ -122,7 +148,36 @@ const Tab2: React.FC = () => {
               ))}
             </IonSelect>
           </IonItem>
+
+          {videoInputDevices.length > 1 && (
+            <IonItem>
+              <IonLabel>Camera</IonLabel>
+              <IonSelect value={selectedDeviceId} onIonChange={(e) => setSelectedDeviceId(e.detail.value)}>
+                {videoInputDevices.map((d) => (
+                  <IonSelectOption key={d.deviceId} value={d.deviceId}>
+                    {d.label || `Camera ${d.deviceId.slice(0, 6)}...`}
+                  </IonSelectOption>
+                ))}
+              </IonSelect>
+            </IonItem>
+          )}
         </IonList>
+
+        <IonModal isOpen={showScanner} onDidDismiss={stopScan}>
+          <div className="scanner-container">
+            <video ref={videoRef} autoPlay muted playsInline className="scanner-video"></video>
+            <div className="scanner-overlay">
+              <div className="scanner-frame" />
+            </div>
+          </div>
+          <IonFooter>
+            <IonToolbar>
+              <IonButtons slot="end">
+                <IonButton onClick={stopScan}>Close</IonButton>
+              </IonButtons>
+            </IonToolbar>
+          </IonFooter>
+        </IonModal>
       </IonContent>
     </IonPage>
   );
