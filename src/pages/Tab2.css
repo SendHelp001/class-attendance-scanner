@@ -1,12 +1,14 @@
 .scanner-container {
   position: relative;
   width: 100%;
-  height: 100%;
+
+  flex-grow: 1;
   background: #000;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  flex-direction: column;
 }
 
 .scanner-video {
@@ -20,47 +22,7 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(2px);
-}
-
-.scanner-frame {
-  position: relative;
-  width: 70%;
-  height: 45%;
-  border-radius: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 0 30px rgba(255, 255, 255, 0.05);
-  overflow: hidden;
-}
-
-.scanner-frame::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent);
-  animation: scan-move 2.5s infinite linear;
-}
-
-@keyframes scan-move {
-  0% {
-    top: 0%;
-  }
-  100% {
-    top: 100%;
-  }
-}
-
-.scanner-overlay::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at center, transparent 35%, rgba(0, 0, 0, 0.6) 100%);
+  display: none;
 }
 
 ion-toolbar {
@@ -80,6 +42,7 @@ ion-button {
   --border-radius: 12px;
   text-transform: none;
   font-weight: 500;
+  transition: opacity 0.2s;
 }
 
 ion-button:hover {
@@ -91,4 +54,22 @@ ion-item {
   --background: transparent;
   --color: var(--ion-color-step-50, #fff);
   --border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Modal Fix CSS (Required for fullscreen) */
+.full-screen-modal {
+  --height: 100%;
+  --width: 100%;
+}
+
+.full-screen-modal .ion-page {
+  display: flex;
+  flex-direction: column;
+}
+
+.full-screen-modal ion-content {
+  --background: #000;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
 }
