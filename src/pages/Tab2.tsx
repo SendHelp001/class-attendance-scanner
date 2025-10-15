@@ -105,7 +105,7 @@ const Tab2: React.FC = () => {
         showToast("Camera start failed. Check permissions.", "danger", 2000);
         stopScan();
       }
-    }, 100);
+    }, 1000);
   };
 
   // ✅ Fetch classes
