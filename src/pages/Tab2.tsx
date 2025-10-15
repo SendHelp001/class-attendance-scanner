@@ -1,9 +1,21 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { IonButton, IonButtons, IonContent, IonHeader, IonItem, IonLabel, IonList, IonPage, IonSelect, IonSelectOption, IonTitle, IonToolbar, IonModal, useIonToast, IonFooter } from "@ionic/react";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
-// Assuming you have these types/functions defined elsewhere
-import { ClassRoom, listMyClasses, scanAttendance, listScanTypes, type ScanType } from "../utils/api";
+
+import { ClassRoom, listMyClasses, scanAttendance, listScanTypes, ScanType } from "../utils/api";
 import "./Tab2.css";
+
+const SCANNER_ID = "reader";
+
+const SUPPORTED_FORMATS: Html5QrcodeSupportedFormats[] = [
+  Html5QrcodeSupportedFormats.QR_CODE,
+  Html5QrcodeSupportedFormats.CODE_128,
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.UPC_A,
+  Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.DATA_MATRIX,
+  Html5QrcodeSupportedFormats.ITF,
+];
 
 const Tab2: React.FC = () => {
   const [classes, setClasses] = useState<ClassRoom[]>([]);
@@ -11,57 +23,98 @@ const Tab2: React.FC = () => {
   const [scanTypes, setScanTypes] = useState<ScanType[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState("");
   const [showScanner, setShowScanner] = useState(false);
-  const [cameras, setCameras] = useState<any[]>([]);
-  const [selectedCameraId, setSelectedCameraId] = useState("");
-  const [presentToast] = useIonToast();
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
-  const scannerId = "reader";
+  const [presentToast] = useIonToast();
 
   const showToast = (message: string, color: "success" | "danger" | "warning" | "primary" = "primary", duration: number = 2000) => {
     presentToast({ message, duration, color });
   };
 
-  // --- Stop scanning function (memoized) ---
   const stopScan = useCallback(async () => {
-    try {
-      await html5QrCodeRef.current?.stop();
-      await html5QrCodeRef.current?.clear();
-    } catch (e) {
-      console.warn("Scanner already stopped or failed to clear.");
+    if (html5QrCodeRef.current) {
+      try {
+        await html5QrCodeRef.current.stop();
+        await html5QrCodeRef.current.clear();
+        console.log("Scanner stopped and cleared.");
+      } catch (e) {
+        console.warn("Error stopping scanner:", e);
+      }
+      html5QrCodeRef.current = null;
     }
-    html5QrCodeRef.current = null;
     setShowScanner(false);
   }, []);
 
-  // --- Handle scan result function (memoized) ---
   const handleScanResult = useCallback(
     async (decodedText: string) => {
+      stopScan();
+
       try {
         const { student } = await scanAttendance(selectedClassId, decodedText, selectedTypeId as any);
-        showToast(student ? `Marked ${student.name}` : `Recorded scan: ${decodedText}`, "success", 1500);
-        stopScan(); // Stop scanner after successful scan
+        showToast(student ? `Marked ${student.name} as present` : `Recorded scan: ${decodedText}`, "success", 1500);
       } catch (e: any) {
-        showToast(e.message ?? "Failed to record attendance", "danger", 2000);
+        showToast(e.message ?? "Failed to record attendance", "danger", 2500);
       }
     },
     [selectedClassId, selectedTypeId, stopScan]
   );
 
-  // --- Load classes and cameras (runs once) ---
+  const startScan = async () => {
+    if (!selectedClassId || !selectedTypeId) {
+      showToast("Select class and scan type first", "warning", 1500);
+      return;
+    }
+
+    if (!navigator.mediaDevices?.getUserMedia) {
+      showToast("Camera access not supported by your browser.", "danger", 3000);
+      return;
+    }
+
+    setShowScanner(true);
+
+    setTimeout(async () => {
+      try {
+        const html5QrCode = new Html5Qrcode(SCANNER_ID, {
+          formatsToSupport: [Html5QrcodeSupportedFormats.CODE_39],
+        } as any);
+
+        html5QrCodeRef.current = html5QrCode;
+
+        await html5QrCode.start(
+          { facingMode: "environment" },
+          {
+            fps: 30,
+
+            qrbox: (viewfinderWidth: number, viewfinderHeight: number) => {
+              const width = Math.min(viewfinderWidth * 0.9, 400);
+              const height = Math.min(viewfinderHeight * 0.25, 150);
+              return { width, height };
+            },
+
+            aspectRatio: 1.7,
+          },
+          (decodedText, result) => {
+            console.log("Decoded:", decodedText, result);
+            handleScanResult(decodedText);
+          },
+          (errorMessage) => {}
+        );
+
+        console.log(" Scanner started (QR + Barcode)");
+      } catch (e: any) {
+        console.error("Start scan failed:", e);
+        showToast("Camera start failed. Check permissions.", "danger", 2000);
+        stopScan();
+      }
+    }, 100);
+  };
+
+  // ✅ Fetch classes
   useEffect(() => {
     listMyClasses()
       .then(setClasses)
-      .catch((e) => showToast(e.message, "danger"));
-
-    Html5Qrcode.getCameras()
-      .then((devices) => {
-        setCameras(devices);
-        if (devices.length > 0) setSelectedCameraId(devices[0].id);
-      })
-      .catch(() => showToast("Unable to access camera devices", "danger"));
+      .catch((e) => showToast(e.message ?? "Failed to load classes", "danger"));
   }, []);
 
-  // --- Load scan types (runs when selectedClassId changes) ---
   useEffect(() => {
     if (!selectedClassId) {
       setScanTypes([]);
@@ -72,56 +125,12 @@ const Tab2: React.FC = () => {
       .then((types) => {
         setScanTypes(types);
         if (types.length && !selectedTypeId) setSelectedTypeId(types[0].id);
+        if (!types.length) showToast("No scan types configured for this class.", "warning");
       })
       .catch((e) => showToast(e.message, "danger"));
   }, [selectedClassId]);
 
-  // --- Start scanning ---
-  const startScan = async () => {
-    if (!selectedClassId || !selectedTypeId) {
-      showToast("Select class and scan type first", "warning", 1500);
-      return;
-    }
-    if (!selectedCameraId) {
-      showToast("No camera available or selected", "danger", 2000);
-      return;
-    }
-
-    setShowScanner(true);
-
-    // Use a small timeout to ensure the IonModal has rendered the scannerId div
-    setTimeout(async () => {
-      try {
-        const html5QrCode = new Html5Qrcode(scannerId, {
-          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-          verbose: false,
-        });
-        html5QrCodeRef.current = html5QrCode;
-
-        await html5QrCode.start(
-          { deviceId: { exact: selectedCameraId } },
-          {
-            fps: 10,
-            qrbox: (viewfinderWidth, viewfinderHeight) => {
-              const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
-              const qrboxSize = Math.floor(minEdgeSize * 0.7); // 70% of the smaller dimension
-              return { width: qrboxSize, height: qrboxSize };
-            },
-            aspectRatio: 1.0,
-          },
-          (decodedText) => handleScanResult(decodedText),
-          () => {
-            /* Ignore decode errors */
-          }
-        );
-
-        console.log("Scanner started.");
-      } catch (e: any) {
-        showToast(e.message ?? "Camera start failed", "danger", 2000);
-        stopScan();
-      }
-    }, 300);
-  };
+  const isScanReady = selectedClassId && selectedTypeId;
 
   return (
     <IonPage>
@@ -129,7 +138,7 @@ const Tab2: React.FC = () => {
         <IonToolbar>
           <IonTitle>Scan Attendance</IonTitle>
           <IonButtons slot="end">
-            <IonButton onClick={startScan} disabled={!selectedClassId || !selectedTypeId}>
+            <IonButton onClick={startScan} disabled={!isScanReady}>
               Start Scan
             </IonButton>
           </IonButtons>
@@ -138,8 +147,7 @@ const Tab2: React.FC = () => {
 
       <IonContent fullscreen>
         <IonList inset={true}>
-          {/* Class Selection */}
-          <IonItem>
+          <IonItem lines="full">
             <IonLabel position="stacked">Class</IonLabel>
             <IonSelect value={selectedClassId} placeholder="Select class" onIonChange={(e) => setSelectedClassId(e.detail.value)}>
               {classes.map((c) => (
@@ -150,8 +158,7 @@ const Tab2: React.FC = () => {
             </IonSelect>
           </IonItem>
 
-          {/* Scan Type Selection */}
-          <IonItem>
+          <IonItem lines="full">
             <IonLabel position="stacked">Scan Type</IonLabel>
             <IonSelect
               value={selectedTypeId}
@@ -166,39 +173,22 @@ const Tab2: React.FC = () => {
               ))}
             </IonSelect>
           </IonItem>
-
-          {/* Camera Selection (Only if more than one camera is available) */}
-          {cameras.length > 1 && (
-            <IonItem>
-              <IonLabel position="stacked">Camera</IonLabel>
-              <IonSelect value={selectedCameraId} onIonChange={(e) => setSelectedCameraId(e.detail.value)}>
-                {cameras.map((d) => (
-                  <IonSelectOption key={d.id} value={d.id}>
-                    {d.label || `Camera ${d.id.slice(0, 6)}...`}
-                  </IonSelectOption>
-                ))}
-              </IonSelect>
-            </IonItem>
-          )}
         </IonList>
 
-        <IonModal
-          isOpen={showScanner}
-          onDidDismiss={stopScan}
-          // Optional: Force full screen on mobile
-          className="full-screen-modal"
-        >
+        <IonModal isOpen={showScanner} onDidDismiss={stopScan} className="full-screen-modal">
           <div className="scanner-container">
-            {/* The video stream is injected into this div by html5-qrcode */}
-            <div id={scannerId} className="scanner-video" />
+            <div id={SCANNER_ID} className="scanner-video" />
             <div className="scanner-overlay">
               <div className="scanner-frame" />
             </div>
           </div>
+
           <IonFooter>
             <IonToolbar>
               <IonButtons slot="end">
-                <IonButton onClick={stopScan}>Close</IonButton>
+                <IonButton color="danger" onClick={stopScan}>
+                  Close
+                </IonButton>
               </IonButtons>
             </IonToolbar>
           </IonFooter>
